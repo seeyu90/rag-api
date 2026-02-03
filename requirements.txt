@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+langchain
+langchain-community
+langchain-qdrant
+qdrant-client
+pypdf
+pytest
+flake8
+httpx
+black
+isort

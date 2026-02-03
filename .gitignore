@@ -1,0 +1,13 @@
+# Qdrant 資料目錄
+qdrant_data/
+
+# Python 虛擬環境
+.venv/
+__pycache__/
+*.py[cod]
+
+# 環境變數
+.env
+
+# 暫存檔
+temp_*

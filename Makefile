@@ -2,7 +2,9 @@
 # ------------------------
 SHELL := /bin/bash
 
-# Python 執行路徑與工具定義
+# ------------------------
+# 工具定義
+# ------------------------
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 UVICORN := .venv/bin/uvicorn
@@ -11,7 +13,7 @@ FLAKE8 := .venv/bin/flake8
 BLACK := .venv/bin/black
 ISORT := .venv/bin/isort
 
-# 預設參數設定
+# 預設參數
 PORT ?= 3080
 HOST ?= 0.0.0.0
 Q ?= 請自我介紹
@@ -28,28 +30,33 @@ export $(shell [ -f .env ] && sed 's/=.*//' .env)
 # ------------------------
 # 幫助選單
 # ------------------------
-
 help:
 	@echo "RAG API 控制中心"
 	@echo "------------------------"
-	@echo "1. 環境配置 (Setup):"
-	@echo "   make install      - 建立虛擬環境並安裝套件"
+	@echo "1. 環境設定:"
+	@echo "   make venv         - 建立 Python 虛擬環境"
+	@echo "   make install      - 安裝套件依賴"
 	@echo "   make up           - 啟動 Docker 容器 (Qdrant)"
 	@echo "   make down         - 停止 Docker 容器"
 	@echo ""
-	@echo "2. 開發診斷 (Dev/Check):"
+	@echo "2. 代碼與系統檢查:"
 	@echo "   make format       - 自動代碼格式化 (Black/Isort)"
-	@echo "   make check        - 全系統連線與規範檢查 (取代 doctor)"
-	@echo "   make run          - 啟動 FastAPI 本地開發伺服器"
+	@echo "   make check        - 系統診斷 (代碼規範 / Ollama / Qdrant / Docker)"
 	@echo ""
-	@echo "3. 測試與操作 (Test/Ops):"
-	@echo "   make test-ask     - 測試 RAG 問答介面 (範例: make test-ask Q='什麼是 RAG?')"
-	@echo "   make reset-db     - 清空 Qdrant 所有 Collection"
+	@echo "3. 資料庫操作:"
+	@echo "   make init-db      - 初始化 Qdrant 集合"
+	@echo "   make reset-db     - 清空 Qdrant 所有集合"
+	@echo ""
+	@echo "4. 開發與運行:"
+	@echo "   make run          - 啟動 FastAPI 本地開發伺服器"
+	@echo "   make ingest FILE=path/to/file.pdf - 上傳 PDF 並向量化"
+	@echo "   make test-ask Q='問題' - 測試 RAG 問答"
+	@echo "   make test         - 執行 Pytest 單元測試"
+	@echo "   make smoke        - 執行系統冒煙測試 (需先啟動 make run)"
 
 # ------------------------
 # 環境初始化
 # ------------------------
-
 venv:
 	python3 -m venv .venv
 	$(PIP) install -U pip
@@ -64,9 +71,8 @@ down:
 	docker compose down
 
 # ------------------------
-# 代碼與系統檢查
+# 代碼格式與檢查
 # ------------------------
-
 format:
 	@echo "執行代碼格式化..."
 	@$(ISORT) .
@@ -77,7 +83,7 @@ check: format
 	@echo "-----------------------------------------------"
 	@echo "系統診斷開始"
 	@echo "-----------------------------------------------"
-	
+
 	@echo "[1/4] 代碼規範檢查 (Flake8)"
 	@if [ -f $(FLAKE8) ]; then \
 		$(FLAKE8) . --max-line-length=88 --exclude=.venv,venv,__pycache__ && echo "PASS: 代碼格式符合規範" || (echo "FAIL: 代碼格式不符，請修正"; exit 1); \
@@ -86,8 +92,7 @@ check: format
 	fi
 
 	@echo -e "\n[2/4] 環境變數與 Ollama 連線"
-	@# 提取 .env 中的 URL 並移除引號、空白與 Windows 換行符號 (\r)
-	@OLLAMA_TARGET=$$( [ -f .env ] && grep -E "^OLLAMA_BASE_URL=" .env | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr -d '\r' ); \
+	@OLLAMA_TARGET=$$(grep -E "^[^#]*OLLAMA_BASE_URL=" .env | head -1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr -d '\r'); \
 	if [ -z "$$OLLAMA_TARGET" ]; then echo "FAIL: 未在 .env 設定 OLLAMA_BASE_URL"; exit 1; fi; \
 	echo "目標位址: $$OLLAMA_TARGET"; \
 	if curl -sf --connect-timeout 2 "$$OLLAMA_TARGET/api/tags" > /dev/null; then \
@@ -100,8 +105,7 @@ check: format
 	fi
 
 	@echo -e "\n[3/4] Qdrant 向量資料庫狀態"
-	@Q_HOST=$$( [ -f .env ] && grep -E "^QDRANT_HOST=" .env | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' | tr -d '\r' ); \
-	[ -z "$$Q_HOST" ] && Q_HOST="127.0.0.1"; \
+	@Q_HOST=$$(grep -E "^[^#]*QDRANT_HOST=" .env | head -1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' || echo "127.0.0.1"); \
 	if curl -sf --connect-timeout 2 "http://$$Q_HOST:6333/" > /dev/null; then \
 		echo "PASS: Qdrant 服務運作中"; \
 		echo "現有集合 (Collections):"; \
@@ -121,11 +125,9 @@ check: format
 # ------------------------
 # 執行與測試
 # ------------------------
-
 run:
 	$(UVICORN) app.main:app --reload --host $(HOST) --port $(PORT)
 
-# 使用方式: make ingest FILE=data/employee_rules.pdf
 ingest:
 	@if [ -z "$(FILE)" ]; then \
 		echo "錯誤: 請提供檔案路徑。範例: make ingest FILE=data/employee_rules.pdf"; \
@@ -136,39 +138,53 @@ ingest:
 		exit 1; \
 	fi
 	@echo "正在上傳並處理檔案: $(FILE)..."
-	@# 使用 curl 呼叫 API，注意 8000 埠口必須正在執行 make run
 	@curl -X 'POST' \
-		'http://127.0.0.1:$(PORT)/api/v1/upload' \
+		"http://127.0.0.1:$(PORT)/api/v1/upload" \
 		-H 'accept: application/json' \
 		-H 'Content-Type: multipart/form-data' \
 		-F "file=@$(FILE);type=application/pdf"
 	@echo -e "\n處理完成"
 
 test-ask:
+	@if ! command -v jq &> /dev/null; then \
+		echo "ERROR: jq 未安裝，請先安裝 jq"; \
+		exit 1; \
+	fi
 	@echo "執行問答測試..."
 	@QUERY_ENCODED=$$(echo "$(Q)" | jq -sRr @uri); \
 	curl -v -X 'POST' \
 		"http://127.0.0.1:$(PORT)/api/v1/ask?query=$$QUERY_ENCODED" \
 		-H 'accept: application/json'
 
+test:
+	@echo "執行 Pytest..."
+	PYTHONPATH=. $(PYTEST) app/tests -v
+
+smoke:
+	@echo "執行系統冒煙測試..."
+	bash smoke_test.sh
+
 # ------------------------
 # Qdrant 初始化
 # ------------------------
 init-db:
 	@echo "正在初始化 Qdrant 集合 (維度: $(COLLECTION_DIMENSION))..."
-	@# 建立 documents 集合
-	@curl -X PUT http://localhost:6333/collections/$(COLLECTION_DOCS) \
+	@Q_HOST=$$(grep -E "^[^#]*QDRANT_HOST=" .env | head -1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' || echo "127.0.0.1"); \
+	curl -X PUT http://$$Q_HOST:6333/collections/$(COLLECTION_DOCS) \
 		-H "Content-Type: application/json" \
-		-d '{"vectors": {"size": $(COLLECTION_DIMENSION), "distance": "Cosine"}}'
-	@echo "\n---"
-	@# 建立 self_learning 集合
-	@curl -X PUT http://localhost:6333/collections/$(COLLECTION_LEARN) \
+		-d '{"vectors": {"size": $(COLLECTION_DIMENSION), "distance": "Cosine"}}'; \
+	echo "\n---"; \
+	curl -X PUT http://$$Q_HOST:6333/collections/$(COLLECTION_LEARN) \
 		-H "Content-Type: application/json" \
-		-d '{"vectors": {"size": $(COLLECTION_DIMENSION), "distance": "Cosine"}}'
-	@echo "\n初始化完成"
+		-d '{"vectors": {"size": $(COLLECTION_DIMENSION), "distance": "Cosine"}}'; \
+	echo "\n初始化完成"
 
 reset-db:
 	@echo "重置向量資料庫集合..."
-	@curl -s -X DELETE http://localhost:6333/collections/$(COLLECTION_DOCS) > /dev/null
-	@curl -s -X DELETE http://localhost:6333/collections/$(COLLECTION_LEARN) > /dev/null
-	@echo "重置完成 (已刪除: $(COLLECTION_DOCS), $(COLLECTION_LEARN))"
+	@Q_HOST=$$(grep -E "^[^#]*QDRANT_HOST=" .env | head -1 | cut -d'=' -f2- | tr -d '"' | tr -d "'" | tr -d ' ' || echo "127.0.0.1"); \
+	curl -s -X DELETE http://$$Q_HOST:6333/collections/$(COLLECTION_DOCS) > /dev/null; \
+	curl -s -X DELETE http://$$Q_HOST:6333/collections/$(COLLECTION_LEARN) > /dev/null; \
+	echo "重置完成 (已刪除: $(COLLECTION_DOCS), $(COLLECTION_LEARN))"
+
+rebuild-db: reset-db init-db
+	@echo "Qdrant 資料庫已重建完成"

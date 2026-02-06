@@ -132,8 +132,22 @@ make up
 ```plaintext
 .
 ├── app/
-│   ├── main.py          # 主程式與 API 邏輯
-│   └── tests/           # Pytest 測試案例
+│ 	├── main.py              # 🚪 只負責 API & DI
+│ 	├── api/
+│   │ 	├── ask.py           # /ask endpoint
+│   │ 	├── upload.py        # /upload endpoint
+│   │   └── feedback.py      # /feedback endpoint
+│ 	├── rag/
+│ 	│   ├── pipeline.py      # RAG 主流程（retrieve → decide → generate）
+│ 	│   ├── retriever.py     # 向量檢索 + score gate
+│   │ 	├── prompt.py        # 所有 Prompt 定義
+│   │   └── guard.py         # 拒答 / 規範化回答
+│ 	├── infra/
+│ 	│   ├── qdrant.py        # Qdrant client & collections
+│ 	│   └── ollama.py        # LLM / Embedding 初始化
+│ 	└── domain/
+│ 	    └── feedback.py      # self-learning 規則（≥4 分）
+│ 
 ├── qdrant_data/         # 向量資料庫持久化目錄（已加入 .gitignore）
 ├── .env                 # 環境變數配置（模型名稱、URL）
 ├── Dockerfile

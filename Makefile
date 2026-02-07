@@ -165,6 +165,19 @@ smoke:
 	bash smoke_test.sh
 
 # ------------------------
+# 前端介面 (Streamlit):
+# ------------------------
+.PHONY: run-frontend
+run-frontend:
+	@echo "正在啟動 Streamlit 前端介面..."
+	@if [ ! -f "frontend/app.py" ]; then \
+		echo "錯誤: 找不到 frontend/app.py。請確認檔案已放置於正確路徑。"; \
+		exit 1; \
+	fi
+	@# 檢查是否安裝 streamlit，若無則提示安裝
+	@.venv/bin/streamlit run frontend/app.py --server.port 8501 --server.address $(HOST)
+
+# ------------------------
 # Qdrant 初始化
 # ------------------------
 init-db:

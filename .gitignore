@@ -11,3 +11,4 @@ __pycache__/
 
 # 暫存檔
 temp_*
+temp/*

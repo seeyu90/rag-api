@@ -11,3 +11,7 @@ flake8
 httpx
 black
 isort
+
+# frontend
+streamlit
+requests
